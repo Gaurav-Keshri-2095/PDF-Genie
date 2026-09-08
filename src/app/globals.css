@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens.
+ *
+ * Both themes are defined here as explicit values so nothing depends on a
+ * media query alone, and the palette stays consistent between the dashboard,
+ * the viewer, and the public share page.
+ */
+:root {
+  --background: #f7f7f8;
+  --surface: #ffffff;
+  --surface-muted: #f2f2f4;
+  --border: #e3e3e7;
+  --foreground: #17171a;
+  --muted-foreground: #6b6b76;
+  --accent: #4338ca;
+  --accent-foreground: #ffffff;
+  --accent-soft: #eef0ff;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --success: #067647;
+  --success-soft: #ecfdf3;
+  --warning: #b54708;
+  --warning-soft: #fffaeb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b0b0d;
+    --surface: #16161a;
+    --surface-muted: #1f1f25;
+    --border: #2c2c33;
+    --foreground: #f4f4f5;
+    --muted-foreground: #a0a0ac;
+    --accent: #8b83f7;
+    --accent-foreground: #12121a;
+    --accent-soft: #1e1b3a;
+    --danger: #f97066;
+    --danger-soft: #2c1210;
+    --success: #4ade80;
+    --success-soft: #0d2419;
+    --warning: #fdb022;
+    --warning-soft: #2b1c05;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  border-color: var(--border);
+}
+
+/* react-pdf needs these two layers styled or selected text renders as a
+   misaligned overlay on top of the page. */
+.react-pdf__Page {
+  background: var(--surface) !important;
+}
+
+.react-pdf__Page__textContent {
+  user-select: text;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
