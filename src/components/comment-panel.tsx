@@ -234,7 +234,7 @@ export function CommentPanel({
                       <ul className="mt-3 space-y-4">
                         {repliesByParent[comment.id].map((reply) => (
                           <li key={reply.id} className="flex gap-3">
-                            <Avatar name={reply.author_name} className="size-8" />
+                            <Avatar name={reply.author_name} />
                             <div className="min-w-0 flex-1 space-y-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm font-medium text-foreground">
