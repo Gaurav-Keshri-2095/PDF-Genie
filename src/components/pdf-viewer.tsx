@@ -170,9 +170,97 @@ export function PdfViewer({
         });
       }
     };
+
+    let prevPinchDistance: number | null = null;
+    let pinchCenter: { x: number; y: number } | null = null;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        prevPinchDistance = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        pinchCenter = {
+          x: (t1.clientX + t2.clientX) / 2,
+          y: (t1.clientY + t2.clientY) / 2,
+        };
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && prevPinchDistance !== null && pinchCenter !== null) {
+        if (e.cancelable) e.preventDefault();
+        
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const distance = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        const ratio = distance / prevPinchDistance;
+        prevPinchDistance = distance;
+
+        pinchCenter = {
+          x: (t1.clientX + t2.clientX) / 2,
+          y: (t1.clientY + t2.clientY) / 2,
+        };
+        const currentCenter = pinchCenter;
+
+        onScaleChange((prev) => {
+          const newScale = Math.min(Math.max(1, prev * ratio), 5);
+          if (newScale === prev) return prev;
+
+          let anchorPageNode: HTMLDivElement | null = null;
+          let minDistance = Infinity;
+
+          for (const node of Array.from(pageRefs.current.values())) {
+            const rect = node.getBoundingClientRect();
+            if (currentCenter.y >= rect.top && currentCenter.y <= rect.bottom) {
+              anchorPageNode = node;
+              break;
+            }
+            const dist = Math.min(
+              Math.abs(currentCenter.y - rect.top),
+              Math.abs(currentCenter.y - rect.bottom)
+            );
+            if (dist < minDistance) {
+              minDistance = dist;
+              anchorPageNode = node;
+            }
+          }
+
+          if (anchorPageNode) {
+            const rect = anchorPageNode.getBoundingClientRect();
+            scrollAnchor.current = {
+              page: Number(anchorPageNode.dataset.page),
+              ratioX: (currentCenter.x - rect.left) / Math.max(1, rect.width),
+              ratioY: (currentCenter.y - rect.top) / Math.max(1, rect.height),
+              clientX: currentCenter.x,
+              clientY: currentCenter.y,
+            };
+          }
+          return newScale;
+        });
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        prevPinchDistance = null;
+        pinchCenter = null;
+      }
+    };
+
     // must be non-passive to preventDefault
     element.addEventListener("wheel", handleWheel, { passive: false });
-    return () => element.removeEventListener("wheel", handleWheel);
+    element.addEventListener("touchstart", handleTouchStart, { passive: false });
+    element.addEventListener("touchmove", handleTouchMove, { passive: false });
+    element.addEventListener("touchend", handleTouchEnd);
+    element.addEventListener("touchcancel", handleTouchEnd);
+
+    return () => {
+      element.removeEventListener("wheel", handleWheel);
+      element.removeEventListener("touchstart", handleTouchStart);
+      element.removeEventListener("touchmove", handleTouchMove);
+      element.removeEventListener("touchend", handleTouchEnd);
+      element.removeEventListener("touchcancel", handleTouchEnd);
+    };
   }, [onScaleChange]);
 
   useLayoutEffect(() => {
