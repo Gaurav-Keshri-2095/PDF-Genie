@@ -32,6 +32,12 @@ export default async function DashboardPage() {
   console.log("Error:", error);
   console.log("-----------------------------");
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("has_completed_tour")
+    .eq("id", user.id)
+    .single();
+
   return (
     <>
       <AppHeader email={user.email} />
@@ -43,7 +49,11 @@ export default async function DashboardPage() {
           </Alert>
         </div>
       ) : null}
-      <DashboardClient initialDocuments={(data ?? []) as DocumentSummaryView[]} />
+      <DashboardClient
+        initialDocuments={(data ?? []) as DocumentSummaryView[]}
+        userId={user.id}
+        hasCompletedTour={profile?.has_completed_tour ?? false}
+      />
     </>
   );
 }

@@ -111,6 +111,7 @@ export function UploadDropzone({
   return (
     <div className="space-y-2">
       <div
+        id="tour-upload-dropzone"
         onDragOver={(event) => {
           event.preventDefault();
           setDragging(true);

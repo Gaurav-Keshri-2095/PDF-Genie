@@ -10,7 +10,7 @@ import { missingSupabaseConfig } from "@/lib/env";
 import { grantForOwner } from "@/lib/handlers/access";
 import { listComments } from "@/lib/handlers/comments";
 import { loadDocumentView } from "@/lib/handlers/document";
-import { getCurrentUser } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getCurrentUser } from "@/lib/supabase/server";
 
 // Per-user data behind a session cookie: never prerender or cache.
 export const dynamic = "force-dynamic";
@@ -29,8 +29,17 @@ export default async function DocumentPage({ params }: PageProps<"/documents/[id
   const grant = await grantForOwner(id);
   if (!grant) notFound();
 
-  const [document, comments] = await Promise.all([loadDocumentView(grant), listComments(grant)]);
+  const [document, comments, profileResult] = await Promise.all([
+    loadDocumentView(grant), 
+    listComments(grant),
+    createSupabaseServerClient().then(supabase => 
+      supabase.from("profiles").select("has_completed_tour").eq("id", user.id).single()
+    )
+  ]);
+  
   if (!document) notFound();
+  
+  const hasCompletedTour = profileResult.data?.has_completed_tour ?? false;
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
@@ -50,6 +59,8 @@ export default async function DocumentPage({ params }: PageProps<"/documents/[id
         canComment
         initialComments={comments}
         shareControl={<ShareButton documentId={id} />}
+        userId={user.id}
+        hasCompletedTour={hasCompletedTour}
       />
     </div>
   );

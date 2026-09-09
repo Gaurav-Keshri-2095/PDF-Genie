@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DocumentCard } from "@/components/document-card";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { Alert, EmptyState, Input, Spinner } from "@/components/ui";
+import { useTour } from "@/hooks/use-tour";
 import type { DocumentSummaryView } from "@/lib/types";
 
 /** Long enough that the server switches to semantic search - see /api/search. */
@@ -13,7 +14,15 @@ const SEMANTIC_MIN_LENGTH = 3;
 const SEARCH_DEBOUNCE_MS = 300;
 const POLL_INTERVAL_MS = 2_500;
 
-export function DashboardClient({ initialDocuments }: { initialDocuments: DocumentSummaryView[] }) {
+export function DashboardClient({ 
+  initialDocuments,
+  userId,
+  hasCompletedTour
+}: { 
+  initialDocuments: DocumentSummaryView[],
+  userId: string,
+  hasCompletedTour: boolean
+}) {
   const [documents, setDocuments] = useState(initialDocuments);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DocumentSummaryView[] | null>(null);
@@ -36,6 +45,17 @@ export function DashboardClient({ initialDocuments }: { initialDocuments: Docume
       // Aborted or offline; the next poll or action will pick it up.
     }
   }, []);
+
+  const { startUploadTour, startDocumentCardTour } = useTour(userId, hasCompletedTour);
+
+  useEffect(() => {
+    if (documents.length === 0) {
+      startUploadTour();
+    } else if (initialDocuments.length === 0 && documents.length > 0) {
+      // The user uploaded their first document!
+      startDocumentCardTour();
+    }
+  }, [documents.length, initialDocuments.length, startUploadTour, startDocumentCardTour]);
 
   // Poll only while something is actually being processed, so an idle
   // dashboard makes no requests at all.

@@ -8,8 +8,10 @@ import { ChatPanel } from "@/components/chat-panel";
 import { CommentPanel } from "@/components/comment-panel";
 import { RetryIngest } from "@/components/retry-ingest";
 import { Badge, Button, Spinner } from "@/components/ui";
+import { useTour } from "@/hooks/use-tour";
 import type { AccessContext, CommentRecord, DocumentSummaryView } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import React from "react";
 
 /**
  * react-pdf touches browser-only APIs, so it must not be server-rendered.
@@ -38,6 +40,8 @@ export function DocumentWorkspace({
   canComment,
   initialComments,
   shareControl,
+  userId,
+  hasCompletedTour,
 }: {
   access: AccessContext;
   document: DocumentSummaryView;
@@ -45,6 +49,8 @@ export function DocumentWorkspace({
   initialComments: CommentRecord[];
   /** Owner-only affordance (the share-link button); absent in the share lane. */
   shareControl?: React.ReactNode;
+  userId?: string;
+  hasCompletedTour?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("chat");
   const [currentPage, setCurrentPage] = useState(1);
@@ -56,6 +62,14 @@ export function DocumentWorkspace({
     setJumpTarget({ page, nonce: Date.now() });
     setCurrentPage(page);
   }, []);
+
+  const { startWorkspaceTour } = useTour(userId ?? "", hasCompletedTour ?? true);
+
+  React.useEffect(() => {
+    if (userId && hasCompletedTour === false) {
+      startWorkspaceTour();
+    }
+  }, [userId, hasCompletedTour, startWorkspaceTour]);
 
   const chatDisabled = !document.has_text || document.status !== "ready";
   const chatDisabledReason = !document.has_text
@@ -96,7 +110,7 @@ export function DocumentWorkspace({
             </div>
           </div>
 
-          <div className="min-h-0 min-w-0 flex-1 relative">
+          <div className="min-h-0 min-w-0 flex-1 relative" id="tour-pdf">
             <PdfViewer
               access={access}
               hasText={document.has_text}
@@ -124,12 +138,14 @@ export function DocumentWorkspace({
               onClick={() => setTab("chat")}
               icon={<Sparkles className="size-4" />}
               label="AI Chat"
+              id="tour-ai-chat"
             />
             <TabButton
               active={tab === "comments"}
               onClick={() => setTab("comments")}
               icon={<MessageSquare className="size-4" />}
               label="Comments"
+              id="tour-comments"
             />
           </div>
 
@@ -163,16 +179,19 @@ function TabButton({
   onClick,
   icon,
   label,
+  id,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
+  id?: string;
 }) {
   return (
     <button
       type="button"
       role="tab"
+      id={id}
       aria-selected={active}
       onClick={onClick}
       className={cn(
@@ -230,7 +249,7 @@ function SummaryBanner({
           ) : null}
         </div>
 
-        {shareControl ? <div className="shrink-0">{shareControl}</div> : null}
+        {shareControl ? <div className="shrink-0" id="tour-share">{shareControl}</div> : null}
       </div>
     </div>
   );

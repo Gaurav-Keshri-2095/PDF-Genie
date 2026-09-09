@@ -28,7 +28,7 @@ export function DocumentCard({
   };
 
   return (
-    <Card className="group flex flex-col transition-colors hover:border-accent/50 relative overflow-hidden">
+    <Card id="tour-document-card" className="group flex flex-col transition-colors hover:border-accent/50 relative overflow-hidden">
       <Link href={`/documents/${document.id}`} className={cn("flex flex-1 flex-col gap-3 p-4 transition-opacity", isNavigating && "opacity-40 pointer-events-none")} onClick={handleClick}>
         <div className="flex items-start gap-3">
           <FileText className="mt-0.5 size-4 shrink-0 text-accent" />
