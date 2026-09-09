@@ -61,7 +61,7 @@ export function CommentPanel({
     // inside what a comment thread needs.
     const timer = setInterval(async () => {
       try {
-        const response = await fetch(`${apiBase(access)}/comments`);
+        const response = await fetch(`${apiBase(access)}/discussions`);
         if (!response.ok) return;
         const payload = await response.json();
         setComments(payload.comments ?? []);
@@ -87,7 +87,7 @@ export function CommentPanel({
     setError(null);
 
     try {
-      const response = await fetch(`${apiBase(access)}/comments`, {
+      const response = await fetch(`${apiBase(access)}/discussions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -64,6 +64,19 @@ export function DocumentWorkspace({
       ? "Still reading this document. Chat will be available in a moment."
       : "This document failed to process, so chat is unavailable.";
 
+  const [sidebarSize, setSidebarSize] = useState<{ unit: "%" | "px"; value: number } | undefined>();
+
+  const handleDrag = useCallback((e: React.PointerEvent) => {
+    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    if (isDesktop) {
+      const newWidth = window.innerWidth - e.clientX;
+      setSidebarSize({ unit: "px", value: Math.min(Math.max(250, newWidth), 800) });
+    } else {
+      const percentage = (window.innerHeight - e.clientY) / window.innerHeight;
+      setSidebarSize({ unit: "%", value: Math.min(Math.max(20, percentage * 100), 80) });
+    }
+  }, []);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SummaryBanner document={document} access={access} shareControl={shareControl} />
@@ -95,9 +108,15 @@ export function DocumentWorkspace({
           </div>
         </section>
 
+        <Resizer onDrag={handleDrag} />
+
         <aside
           aria-label="Comments and chat"
-          className="flex min-h-0 flex-1 w-full flex-col bg-surface lg:flex-none lg:w-[400px] xl:w-[440px]"
+          className={cn(
+            "flex min-h-0 shrink-0 flex-col bg-surface",
+            !sidebarSize && "flex-1 lg:flex-none lg:w-[400px] xl:w-[440px]"
+          )}
+          style={sidebarSize ? { flexBasis: `${sidebarSize.value}${sidebarSize.unit}`, width: "auto", height: "auto" } : undefined}
         >
           <div role="tablist" className="flex shrink-0 border-b border-border">
             <TabButton
@@ -295,6 +314,24 @@ export function ZoomControls({
       >
         <ZoomIn className="size-3.5" />
       </Button>
+    </div>
+  );
+}
+
+export function Resizer({ onDrag }: { onDrag: (e: React.PointerEvent) => void }) {
+  return (
+    <div
+      className="relative z-10 flex h-4 w-full shrink-0 touch-none cursor-row-resize items-center justify-center border-y border-border bg-surface transition-colors hover:bg-surface-muted lg:h-full lg:w-4 lg:cursor-col-resize lg:border-y-0 lg:border-x"
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          onDrag(e);
+        }
+      }}
+    >
+      <div className="h-1 w-8 rounded-full bg-border lg:h-8 lg:w-1" />
     </div>
   );
 }
