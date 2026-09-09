@@ -46,13 +46,13 @@ export function DashboardClient({
     }
   }, []);
 
-  const { startUploadTour, startDocumentCardTour } = useTour(userId, hasCompletedTour);
+  const { startUploadTour, startDocumentCardTour, destroyTour } = useTour(userId, hasCompletedTour);
 
   useEffect(() => {
     if (documents.length === 0) {
       startUploadTour();
-    } else if (initialDocuments.length === 0 && documents.length > 0) {
-      // The user uploaded their first document!
+    } else if (documents.length > initialDocuments.length) {
+      // The user uploaded a new document!
       startDocumentCardTour();
     }
   }, [documents.length, initialDocuments.length, startUploadTour, startDocumentCardTour]);
@@ -147,7 +147,11 @@ export function DashboardClient({
         ) : null}
       </div>
 
-      <UploadDropzone onUploaded={refresh} existingFilenames={documents.map((d) => d.filename)} />
+      <UploadDropzone 
+        onUploaded={refresh} 
+        onUploadStart={destroyTour}
+        existingFilenames={documents.map((d) => d.filename)} 
+      />
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
 

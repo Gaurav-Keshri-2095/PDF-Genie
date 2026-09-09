@@ -25,9 +25,11 @@ type Stage = "idle" | "preparing" | "uploading" | "processing";
  */
 export function UploadDropzone({
   onUploaded,
+  onUploadStart,
   existingFilenames = [],
 }: {
   onUploaded: () => void;
+  onUploadStart?: () => void;
   existingFilenames?: string[];
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +62,7 @@ export function UploadDropzone({
       }
 
       try {
+        if (onUploadStart) onUploadStart();
         setStage("preparing");
         const prepared = await fetch("/api/uploads", {
           method: "POST",
@@ -123,9 +126,13 @@ export function UploadDropzone({
           const file = event.dataTransfer.files?.[0];
           if (file && !busy) void upload(file);
         }}
+        onClick={() => {
+          if (!busy) inputRef.current?.click();
+        }}
         className={cn(
           "rounded-xl border border-dashed px-6 py-8 text-center transition-colors",
-          dragging ? "border-accent bg-accent-soft" : "border-border bg-surface",
+          busy ? "cursor-default" : "cursor-pointer",
+          dragging ? "border-accent bg-accent-soft" : "border-border bg-surface hover:border-accent hover:bg-surface-muted",
         )}
       >
         <input
@@ -152,13 +159,7 @@ export function UploadDropzone({
           <>
             <Upload className="mx-auto size-5 text-muted-foreground" />
             <p className="mt-2 text-sm text-foreground">
-              <label
-                htmlFor="pdf-upload"
-                className="cursor-pointer font-medium text-accent hover:underline"
-              >
-                Choose a PDF
-              </label>{" "}
-              or drag one here
+              <span className="font-medium text-accent">Choose a PDF</span> or drag one here
             </p>
             <p className="mt-1 text-xs text-muted-foreground">PDF only, up to 25 MB</p>
           </>

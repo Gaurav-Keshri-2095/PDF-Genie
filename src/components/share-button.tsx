@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Copy, Link2, Mail, Plus } from "lucide-react";
-import { useState } from "react";
+import { Check, Copy, Link2, Mail, Plus, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Alert, Button, Input, Spinner } from "@/components/ui";
 
@@ -22,10 +22,29 @@ export function ShareButton({ documentId }: { documentId: string }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSent, setInviteSent] = useState(false);
   const [sendingInvite, setSendingInvite] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setInviting(false);
+        // We do NOT automatically clear `url` on click outside, to prevent accidental loss
+        // of the one-time share link. They must explicitly click the X to dismiss it.
+      }
+    }
+
+    if (inviting || url) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [inviting, url]);
 
   async function createLink() {
     setCreating(true);
     setError(null);
+    setInviting(false); // Close invite if open
 
     try {
       const response = await fetch(`/api/documents/${documentId}/share`, { method: "POST" });
@@ -79,42 +98,55 @@ export function ShareButton({ documentId }: { documentId: string }) {
     }
   }
 
-  if (url) {
-    return (
-      <div className="w-full space-y-2 sm:w-96">
-        <div className="flex gap-2">
-          <Input readOnly value={url} onFocus={(event) => event.currentTarget.select()} />
-          <Button variant="secondary" size="sm" onClick={() => void copy()} className="shrink-0">
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {copied ? "Copied" : "Copy"}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Anyone with this link can read the PDF and comment - no account needed. Copy it now; it
-          can&apos;t be shown again.
-        </p>
-        {error ? <Alert tone="danger">{error}</Alert> : null}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-2 relative">
+    <div className="space-y-2 relative" ref={containerRef}>
       <div className="flex gap-2">
         <Button variant="secondary" size="sm" onClick={() => void createLink()} disabled={creating}>
           {creating ? <Spinner className="size-3" /> : <Link2 className="size-3.5" />}
           Create share link
         </Button>
         <Button 
-          variant={inviting ? "secondary" : "secondary"} // Could style it active if we wanted
+          variant={inviting ? "secondary" : "secondary"} 
           size="sm" 
-          onClick={() => setInviting((prev) => !prev)} 
+          onClick={() => {
+            setInviting((prev) => !prev);
+            setUrl(null); // Close url if open
+          }} 
           disabled={creating}
         >
           <Plus className="size-3.5" />
           Invite
         </Button>
       </div>
+
+      {url && (
+        <div className="absolute left-0 top-full z-10 mt-2 w-full sm:w-96">
+          <div className="rounded-xl border border-border bg-surface p-3 shadow-lg space-y-2">
+            <div className="flex justify-between items-center mb-1">
+              <p className="text-sm font-medium text-foreground">Share link created</p>
+              <button 
+                onClick={() => setUrl(null)} 
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Close"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <Input readOnly value={url} onFocus={(event) => event.currentTarget.select()} />
+              <Button variant="secondary" onClick={() => void copy()} className="shrink-0">
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Anyone with this link can read the PDF and comment - no account needed. Copy it now; it
+              can&apos;t be shown again.
+            </p>
+            {error && !inviting ? <Alert tone="danger">{error}</Alert> : null}
+          </div>
+        </div>
+      )}
       
       {inviting && (
         <div className="absolute left-0 top-full z-10 mt-2 w-full sm:w-96">
@@ -134,14 +166,13 @@ export function ShareButton({ documentId }: { documentId: string }) {
                   Send
                 </Button>
               </div>
-              {error ? <Alert tone="danger">{error}</Alert> : null}
+              {error && inviting ? <Alert tone="danger">{error}</Alert> : null}
             </form>
           </div>
         </div>
       )}
 
       {inviteSent ? <Alert tone="success">Invite sent successfully!</Alert> : null}
-      {error && !inviting ? <Alert tone="danger">{error}</Alert> : null}
     </div>
   );
 }

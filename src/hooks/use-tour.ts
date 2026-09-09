@@ -1,12 +1,21 @@
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 
 export function useTour(userId: string, hasCompletedTour: boolean) {
   const markedComplete = useRef(false);
   const activeTour = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (activeTour.current) {
+        activeTour.current.destroy();
+        activeTour.current = null;
+      }
+    };
+  }, []);
 
   const markComplete = useCallback(async () => {
     if (markedComplete.current || hasCompletedTour) return;
@@ -20,8 +29,8 @@ export function useTour(userId: string, hasCompletedTour: boolean) {
     }
   }, [hasCompletedTour, userId]);
 
-  const startUploadTour = useCallback(() => {
-    if (hasCompletedTour || markedComplete.current || activeTour.current) return;
+  const startUploadTour = useCallback((force = false) => {
+    if ((!force && hasCompletedTour) || (!force && markedComplete.current) || activeTour.current) return;
 
     const tour = driver({
       showProgress: false,
@@ -130,5 +139,12 @@ export function useTour(userId: string, hasCompletedTour: boolean) {
     }, 500);
   }, [hasCompletedTour, markComplete]);
 
-  return { startUploadTour, startDocumentCardTour, startWorkspaceTour };
+  const destroyTour = useCallback(() => {
+    if (activeTour.current) {
+      activeTour.current.destroy();
+      activeTour.current = null;
+    }
+  }, []);
+
+  return { startUploadTour, startDocumentCardTour, startWorkspaceTour, destroyTour };
 }

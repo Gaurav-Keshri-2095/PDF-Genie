@@ -32,11 +32,37 @@ export default async function DashboardPage() {
   console.log("Error:", error);
   console.log("-----------------------------");
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("has_completed_tour")
     .eq("id", user.id)
     .single();
+
+  if (profileError || !profile) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+        <div className="rounded-xl border border-border bg-surface p-6 shadow-xl w-full max-w-sm text-center space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Account Deleted</h2>
+          <p className="text-sm text-muted-foreground">
+            This account no longer exists.
+          </p>
+          <form action={async () => {
+            "use server";
+            const s = await createSupabaseServerClient();
+            await s.auth.signOut();
+            redirect("/");
+          }}>
+            <button 
+              type="submit" 
+              className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
+            >
+              Refresh
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
