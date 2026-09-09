@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Send, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, MessageSquare, Send, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Alert, Avatar, Badge, Button, EmptyState, Input, Spinner, Textarea } from "@/components/ui";
@@ -41,6 +41,11 @@ export function CommentPanel({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
+
+  const toggleReplies = (id: string) => {
+    setExpandedReplies((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // Uncontrolled: the remembered name is written straight to the DOM node
   // after mount, which avoids a hydration mismatch between the server (which
@@ -120,6 +125,25 @@ export function CommentPanel({
     }
   }
 
+  async function handleDelete(commentId: string) {
+    try {
+      const response = await fetch(`${apiBase(access)}/discussions/${commentId}`, {
+        method: "DELETE",
+      });
+      
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.error ?? "Failed to delete comment");
+      }
+      
+      setComments((existing) => 
+        existing.filter((c) => c.id !== commentId && c.parent_id !== commentId)
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not delete comment");
+    }
+  }
+
   const rootComments = comments.filter((c) => !c.parent_id);
   const repliesByParent = comments.reduce((acc, c) => {
     if (c.parent_id) {
@@ -161,6 +185,9 @@ export function CommentPanel({
                       <span className="text-xs text-muted-foreground">
                         {formatDateTime(comment.created_at)}
                       </span>
+                      {access.kind === "owner" && (
+                        <CommentDeleteButton onDelete={() => handleDelete(comment.id)} />
+                      )}
                     </div>
 
                     <p className="text-sm whitespace-pre-wrap text-foreground">{comment.body}</p>
@@ -190,36 +217,55 @@ export function CommentPanel({
 
                 {/* Replies */}
                 {(repliesByParent[comment.id] || []).length > 0 && (
-                  <ul className="ml-8 space-y-3 border-l border-border pl-4">
-                    {repliesByParent[comment.id].map((reply) => (
-                      <li key={reply.id} className="flex gap-3">
-                        <Avatar name={reply.author_name} />
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium text-foreground">
-                              {reply.author_name}
-                            </span>
-                            {reply.author_share_id && !reply.author_user_id ? (
-                              <Badge>Guest</Badge>
-                            ) : null}
-                            <span className="text-xs text-muted-foreground">
-                              {formatDateTime(reply.created_at)}
-                            </span>
-                          </div>
-                          <p className="text-sm whitespace-pre-wrap text-foreground">{reply.body}</p>
-                          {reply.page_number ? (
-                            <button
-                              type="button"
-                              onClick={() => onJumpToPage(reply.page_number!)}
-                              className="text-xs font-medium text-accent hover:underline mt-1"
-                            >
-                              Page {reply.page_number}
-                            </button>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="ml-12 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleReplies(comment.id)}
+                      className="flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent/80 transition-colors rounded-full"
+                    >
+                      {expandedReplies[comment.id] ? (
+                        <ChevronUp className="size-4" />
+                      ) : (
+                        <ChevronDown className="size-4" />
+                      )}
+                      {repliesByParent[comment.id].length} repl{repliesByParent[comment.id].length === 1 ? "y" : "ies"}
+                    </button>
+                    {expandedReplies[comment.id] && (
+                      <ul className="mt-3 space-y-4">
+                        {repliesByParent[comment.id].map((reply) => (
+                          <li key={reply.id} className="flex gap-3">
+                            <Avatar name={reply.author_name} className="size-8" />
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-medium text-foreground">
+                                  {reply.author_name}
+                                </span>
+                                {reply.author_share_id && !reply.author_user_id ? (
+                                  <Badge>Guest</Badge>
+                                ) : null}
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDateTime(reply.created_at)}
+                                </span>
+                                {access.kind === "owner" && (
+                                  <CommentDeleteButton onDelete={() => handleDelete(reply.id)} />
+                                )}
+                              </div>
+                              <p className="text-sm whitespace-pre-wrap text-foreground">{reply.body}</p>
+                              {reply.page_number ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onJumpToPage(reply.page_number!)}
+                                  className="text-xs font-medium text-accent hover:underline mt-1"
+                                >
+                                  Page {reply.page_number}
+                                </button>
+                              ) : null}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </li>
             ))}
@@ -294,5 +340,68 @@ export function CommentPanel({
         </p>
       )}
     </div>
+  );
+}
+
+function CommentDeleteButton({ onDelete }: { onDelete: () => Promise<void> }) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowConfirm(false);
+      }
+    }
+    if (showConfirm) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showConfirm]);
+
+  if (showConfirm) {
+    return (
+      <div 
+        ref={containerRef}
+        className="ml-auto flex items-center gap-1 rounded-md border border-border bg-surface p-1 shadow-sm"
+      >
+        <span className="px-1 text-xs font-medium text-muted-foreground">Delete?</span>
+        <button
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+          onClick={async () => {
+            setIsDeleting(true);
+            await onDelete();
+            setIsDeleting(false);
+            setShowConfirm(false);
+          }}
+          disabled={isDeleting}
+          aria-label="Confirm delete"
+        >
+          {isDeleting ? <Spinner className="size-3.5" /> : <Check className="size-3.5" />}
+        </button>
+        <button
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground disabled:opacity-50"
+          onClick={() => setShowConfirm(false)}
+          disabled={isDeleting}
+          aria-label="Cancel delete"
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setShowConfirm(true)}
+      className="text-xs font-medium text-danger/70 hover:text-danger ml-auto transition-colors"
+      aria-label="Delete comment"
+    >
+      <Trash2 className="size-3.5" />
+    </button>
   );
 }

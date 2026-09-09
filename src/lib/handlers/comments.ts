@@ -59,6 +59,21 @@ export async function createComment(grant: Grant, input: CommentInput): Promise<
   return data as CommentRecord;
 }
 
+export async function deleteComment(grant: Grant, commentId: string): Promise<void> {
+  if (!grant.userId) {
+    throw new Error("Only the owner can delete comments.");
+  }
+
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("comments")
+    .delete()
+    .eq("id", commentId)
+    .eq("document_id", grant.documentId);
+
+  if (error) throw new Error(error.message);
+}
+
 /**
  * Owners are named from their profile - a signed-in user should not be able to
  * post under someone else's name by editing the request body. Share visitors
