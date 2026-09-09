@@ -142,6 +142,10 @@ export async function streamChatAnswer(
           if (signal.aborted) break;
           answer += delta;
           send({ type: "delta", text: delta });
+          
+          // Artificially slow down the stream so it looks like it's typing,
+          // instead of appearing instantly.
+          await new Promise((resolve) => setTimeout(resolve, 30));
         }
 
         // Only persist a complete answer. A reader who navigates away

@@ -44,21 +44,55 @@ export function PdfViewer({
   const [pageCount, setPageCount] = useState(0);
   const [width, setWidth] = useState(0);
 
-  const [renderScale, setRenderScale] = useState(scale);
-  const scaleTimeout = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (scaleTimeout.current) clearTimeout(scaleTimeout.current);
-    scaleTimeout.current = setTimeout(() => {
-      setRenderScale(scale);
-    }, 150);
-    return () => {
-      if (scaleTimeout.current) clearTimeout(scaleTimeout.current);
-    };
-  }, [scale]);
-
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const scrollAnchor = useRef<{
+    page: number;
+    ratioX: number;
+    ratioY: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+
+  const prevScale = useRef(scale);
+  if (prevScale.current !== scale) {
+    // If the scale changed (e.g. via UI buttons) but we have no scroll anchor from
+    // a wheel or touch event, we capture the center of the viewport right now, BEFORE
+    // the DOM updates to the new scale, so we can zoom into the center smoothly.
+    if (!scrollAnchor.current && containerRef.current) {
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const centerY = containerRect.top + containerRect.height / 2;
+      const centerX = containerRect.left + containerRect.width / 2;
+
+      let anchorPageNode: HTMLDivElement | null = null;
+      let minDistance = Infinity;
+
+      for (const node of Array.from(pageRefs.current.values())) {
+        const rect = node.getBoundingClientRect();
+        if (centerY >= rect.top && centerY <= rect.bottom) {
+          anchorPageNode = node;
+          break;
+        }
+        const dist = Math.min(Math.abs(centerY - rect.top), Math.abs(centerY - rect.bottom));
+        if (dist < minDistance) {
+          minDistance = dist;
+          anchorPageNode = node;
+        }
+      }
+
+      if (anchorPageNode) {
+        const rect = anchorPageNode.getBoundingClientRect();
+        scrollAnchor.current = {
+          page: Number(anchorPageNode.dataset.page),
+          ratioX: (centerX - rect.left) / Math.max(1, rect.width),
+          ratioY: (centerY - rect.top) / Math.max(1, rect.height),
+          clientX: centerX,
+          clientY: centerY,
+        };
+      }
+    }
+    prevScale.current = scale;
+  }
 
   /**
    * The file is downloaded once, through a short-lived signed URL, and then
@@ -121,13 +155,7 @@ export function PdfViewer({
     pageRefs.current.get(jumpTarget.page)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [jumpTarget]);
 
-  const scrollAnchor = useRef<{
-    page: number;
-    ratioX: number;
-    ratioY: number;
-    clientX: number;
-    clientY: number;
-  } | null>(null);
+  // scrollAnchor is initialized above to ensure it can be updated during render
 
   useEffect(() => {
     const element = containerRef.current;
@@ -295,7 +323,6 @@ export function PdfViewer({
         file={file}
         width={width}
         scale={scale}
-        renderScale={renderScale}
         error={error}
         pageCount={pageCount}
         setPageCount={setPageCount}
@@ -312,7 +339,6 @@ type SurfaceProps = {
   file: { data: Uint8Array } | null;
   width: number;
   scale: number;
-  renderScale: number;
   error: string | null;
   pageCount: number;
   setPageCount: (count: number) => void;
@@ -326,7 +352,6 @@ function PdfSurface({
   file,
   width,
   scale,
-  renderScale,
   error,
   pageCount,
   setPageCount,
@@ -373,7 +398,6 @@ function PdfSurface({
               page={page}
               width={width}
               scale={scale}
-              renderScale={renderScale}
               register={registerPage}
               onVisible={onVisiblePageChange}
             />
@@ -395,20 +419,39 @@ function LazyPage({
   page,
   width,
   scale,
-  renderScale,
   register,
   onVisible,
 }: {
   page: number;
   width: number;
   scale: number;
-  renderScale: number;
   register: (page: number, element: HTMLDivElement | null) => void;
   onVisible: (page: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shouldRender, setShouldRender] = useState(page <= 2);
-  const [isRendered, setIsRendered] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState(1 / 1.414);
+  const [layers, setLayers] = useState<{ renderScale: number; isReady: boolean }[]>([]);
+
+  useEffect(() => {
+    if (!shouldRender || width === 0) return;
+    
+    // Add a new rendering layer when scale settles, to achieve a seamless double-buffered swap
+    const timeout = setTimeout(() => {
+      setLayers((prev) => {
+        if (prev.length > 0 && prev[prev.length - 1].renderScale === scale) return prev;
+        return [...prev, { renderScale: scale, isReady: false }];
+      });
+    }, 150);
+    return () => clearTimeout(timeout);
+  }, [scale, shouldRender, width]);
+
+  useEffect(() => {
+    // Inject the initial layer immediately
+    if (shouldRender && width > 0 && layers.length === 0) {
+      setLayers([{ renderScale: scale, isReady: false }]);
+    }
+  }, [shouldRender, width, scale, layers.length]);
 
   useEffect(() => {
     const element = ref.current;
@@ -436,33 +479,68 @@ function LazyPage({
   }, [page, register, onVisible]);
 
   return (
-    <div ref={ref} data-page={page} className="relative origin-top-left" style={{ zoom: scale / renderScale }}>
-      {shouldRender && width > 0 ? (
-        <Page
-          pageNumber={page}
-          width={width * renderScale}
-          onRenderSuccess={() => setIsRendered(true)}
-          renderAnnotationLayer
-          renderTextLayer
-          className="overflow-hidden rounded-lg border border-border shadow-sm"
-          loading={isRendered ? undefined : <PagePlaceholder page={page} width={width * renderScale} />}
-        />
+    <div 
+      ref={ref} 
+      data-page={page} 
+      className="relative origin-top-left overflow-hidden rounded-lg border border-border bg-surface shadow-sm" 
+      style={{ 
+        width: width > 0 ? `${width * scale}px` : undefined,
+        aspectRatio
+      }}
+    >
+      {layers.length === 0 ? (
+        <PagePlaceholder page={page} />
       ) : (
-        <PagePlaceholder page={page} width={width * renderScale} />
+        layers.map((layer, index) => {
+          const isFirstLayer = index === 0 && !layer.isReady && layers.length === 1;
+
+          return (
+            <div
+              key={layer.renderScale}
+              className="absolute top-0 left-0 origin-top-left"
+              style={{
+                zoom: scale / layer.renderScale,
+                zIndex: index,
+                opacity: !layer.isReady && index > 0 ? 0 : 1,
+              }}
+            >
+              <Page
+                pageNumber={page}
+                width={width * layer.renderScale}
+                onRenderSuccess={() => {
+                  const pageDiv = ref.current?.querySelector('.react-pdf__Page') as HTMLDivElement | null;
+                  if (pageDiv && pageDiv.offsetHeight > 0) {
+                    setAspectRatio(pageDiv.offsetWidth / pageDiv.offsetHeight);
+                  }
+                  
+                  // Once this high-res canvas is ready, make it the base layer and throw away the old ones
+                  setLayers((prev) => {
+                    const updated = prev.map((l) =>
+                      l.renderScale === layer.renderScale ? { ...l, isReady: true } : l
+                    );
+                    const thisIndex = updated.findIndex((l) => l.renderScale === layer.renderScale);
+                    return updated.slice(thisIndex);
+                  });
+                }}
+                renderAnnotationLayer
+                renderTextLayer
+                className="h-full w-full"
+                loading={isFirstLayer ? <PagePlaceholder page={page} /> : <div />}
+              />
+            </div>
+          );
+        })
       )}
-      <span className="pointer-events-none absolute right-2 bottom-2 rounded bg-foreground/70 px-1.5 py-0.5 text-[10px] font-medium text-background">
+      <span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-foreground/70 px-1.5 py-0.5 text-[10px] font-medium text-background">
         {page}
       </span>
     </div>
   );
 }
 
-function PagePlaceholder({ page, width }: { page: number; width?: number }) {
+function PagePlaceholder({ page }: { page: number }) {
   return (
-    <div
-      className="flex w-full items-center justify-center rounded-lg border border-border bg-surface text-xs text-muted-foreground"
-      style={{ aspectRatio: "1 / 1.414", width: width ? `${width}px` : "100%" }}
-    >
+    <div className="flex h-full w-full items-center justify-center rounded-lg border border-border bg-surface text-xs text-muted-foreground">
       Page {page}
     </div>
   );

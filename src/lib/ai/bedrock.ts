@@ -164,3 +164,51 @@ export function describeBedrockError(error: unknown): string {
 
   return message;
 }
+
+/**
+ * Uses Amazon Nova's multimodal capabilities to perform OCR on a PDF chunk.
+ * Returns an array of strings, one per page.
+ */
+export async function transcribePdfChunk(bytes: Uint8Array): Promise<string> {
+  const env = bedrockEnv();
+
+  const response = await getClient().send(
+    new ConverseCommand({
+      modelId: env.chatModelId, // Nova models support document understanding natively
+      system: [
+        {
+          text: "You are a strict OCR transcription engine. Your task is to transcribe the text from the provided document EXACTLY as it appears, page by page. Do NOT hallucinate, summarize, or add any conversational text. ONLY output the extracted text. If there is no text, output nothing. Separate the text of each page with exactly this delimiter: ---PAGE_BREAK---",
+        },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              document: {
+                format: "pdf",
+                name: "scanned_pdf",
+                source: { bytes },
+              },
+            },
+            {
+              text: "Transcribe the text in this document.",
+            },
+          ],
+        },
+      ],
+      inferenceConfig: {
+        maxTokens: 4096, // Large token limit for multiple pages
+        temperature: 0.0, // Strict, deterministic output
+      },
+    }),
+  );
+
+  const text = response.output?.message?.content
+    ?.map((block) => block.text ?? "")
+    .join("")
+    .trim();
+
+  if (!text) return "";
+  return text;
+}
