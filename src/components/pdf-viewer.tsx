@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, ChevronLeft, ChevronRight, ScanLine } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 
 import "react-pdf/dist/Page/TextLayer.css";
@@ -27,13 +27,35 @@ type PdfViewerProps = {
   /** Set to a page number to scroll there; re-set to the same page re-scrolls. */
   jumpTarget: { page: number; nonce: number } | null;
   onVisiblePageChange: (page: number) => void;
+  scale: number;
+  onScaleChange: (scale: number | ((prev: number) => number)) => void;
 };
 
-export function PdfViewer({ access, hasText, jumpTarget, onVisiblePageChange }: PdfViewerProps) {
+export function PdfViewer({
+  access,
+  hasText,
+  jumpTarget,
+  onVisiblePageChange,
+  scale,
+  onScaleChange,
+}: PdfViewerProps) {
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [width, setWidth] = useState(0);
+
+  const [renderScale, setRenderScale] = useState(scale);
+  const scaleTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (scaleTimeout.current) clearTimeout(scaleTimeout.current);
+    scaleTimeout.current = setTimeout(() => {
+      setRenderScale(scale);
+    }, 150);
+    return () => {
+      if (scaleTimeout.current) clearTimeout(scaleTimeout.current);
+    };
+  }, [scale]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -82,8 +104,7 @@ export function PdfViewer({ access, hasText, jumpTarget, onVisiblePageChange }: 
 
     const observer = new ResizeObserver((entries) => {
       const next = entries[0]?.contentRect.width ?? 0;
-      // Leave room for the page's own padding and shadow.
-      setWidth(Math.max(240, Math.floor(next - 32)));
+      setWidth(Math.max(240, Math.floor(next)));
     });
 
     observer.observe(element);
@@ -100,44 +121,101 @@ export function PdfViewer({ access, hasText, jumpTarget, onVisiblePageChange }: 
     pageRefs.current.get(jumpTarget.page)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [jumpTarget]);
 
-  if (!hasText) {
-    // Still show the document - it is readable, just not queryable.
-    return (
-      <div className="flex h-full flex-col">
-        <div className="border-b border-border bg-warning-soft px-4 py-2 text-xs text-warning">
+  const scrollAnchor = useRef<{
+    page: number;
+    ratioX: number;
+    ratioY: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        onScaleChange((prev) => {
+          const newScale = Math.min(Math.max(1, prev - e.deltaY * 0.01), 5);
+          if (newScale === prev) return prev;
+
+          let anchorPageNode: HTMLDivElement | null = null;
+          let minDistance = Infinity;
+
+          for (const node of Array.from(pageRefs.current.values())) {
+            const rect = node.getBoundingClientRect();
+            if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+              anchorPageNode = node;
+              break;
+            }
+            const dist = Math.min(Math.abs(e.clientY - rect.top), Math.abs(e.clientY - rect.bottom));
+            if (dist < minDistance) {
+              minDistance = dist;
+              anchorPageNode = node;
+            }
+          }
+
+          if (anchorPageNode) {
+            const rect = anchorPageNode.getBoundingClientRect();
+            scrollAnchor.current = {
+              page: Number(anchorPageNode.dataset.page),
+              ratioX: (e.clientX - rect.left) / Math.max(1, rect.width),
+              ratioY: (e.clientY - rect.top) / Math.max(1, rect.height),
+              clientX: e.clientX,
+              clientY: e.clientY,
+            };
+          }
+
+          return newScale;
+        });
+      }
+    };
+    // must be non-passive to preventDefault
+    element.addEventListener("wheel", handleWheel, { passive: false });
+    return () => element.removeEventListener("wheel", handleWheel);
+  }, [onScaleChange]);
+
+  useLayoutEffect(() => {
+    if (scrollAnchor.current && containerRef.current) {
+      const { page, ratioX, ratioY, clientX, clientY } = scrollAnchor.current;
+      const node = pageRefs.current.get(page);
+      if (node) {
+        const rect = node.getBoundingClientRect();
+        const currentX = rect.left + rect.width * ratioX;
+        const currentY = rect.top + rect.height * ratioY;
+
+        containerRef.current.scrollLeft += currentX - clientX;
+        containerRef.current.scrollTop += currentY - clientY;
+      }
+      scrollAnchor.current = null;
+    }
+  }, [scale]);
+
+  return (
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col">
+      {!hasText && (
+        <div className="shrink-0 border-b border-border bg-warning-soft px-4 py-2 text-xs text-warning">
           <span className="inline-flex items-center gap-1.5">
             <ScanLine className="size-3.5" />
             No text layer detected. You can read and comment on this PDF, but the AI features need
             extractable text.
           </span>
         </div>
-        <PdfSurface
-          containerRef={containerRef}
-          file={file}
-          width={width}
-          error={error}
-          pageCount={pageCount}
-          setPageCount={setPageCount}
-          setError={setError}
-          registerPage={registerPage}
-          onVisiblePageChange={onVisiblePageChange}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <PdfSurface
-      containerRef={containerRef}
-      file={file}
-      width={width}
-      error={error}
-      pageCount={pageCount}
-      setPageCount={setPageCount}
-      setError={setError}
-      registerPage={registerPage}
-      onVisiblePageChange={onVisiblePageChange}
-    />
+      )}
+      <PdfSurface
+        containerRef={containerRef}
+        file={file}
+        width={width}
+        scale={scale}
+        renderScale={renderScale}
+        error={error}
+        pageCount={pageCount}
+        setPageCount={setPageCount}
+        setError={setError}
+        registerPage={registerPage}
+        onVisiblePageChange={onVisiblePageChange}
+      />
+    </div>
   );
 }
 
@@ -145,6 +223,8 @@ type SurfaceProps = {
   containerRef: React.RefObject<HTMLDivElement | null>;
   file: { data: Uint8Array } | null;
   width: number;
+  scale: number;
+  renderScale: number;
   error: string | null;
   pageCount: number;
   setPageCount: (count: number) => void;
@@ -157,6 +237,8 @@ function PdfSurface({
   containerRef,
   file,
   width,
+  scale,
+  renderScale,
   error,
   pageCount,
   setPageCount,
@@ -178,7 +260,7 @@ function PdfSurface({
   }
 
   return (
-    <div ref={containerRef} className="h-full overflow-y-auto bg-surface-muted px-4 py-4">
+    <div ref={containerRef} className="h-full min-h-0 min-w-0 flex-1 overflow-auto bg-surface-muted px-4 py-4">
       {!file ? (
         <p className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
           <Spinner />
@@ -195,13 +277,15 @@ function PdfSurface({
               Rendering...
             </p>
           }
-          className="mx-auto flex w-full max-w-3xl flex-col gap-4"
+          className="mx-auto flex w-fit flex-col gap-4"
         >
           {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => (
             <LazyPage
               key={page}
               page={page}
               width={width}
+              scale={scale}
+              renderScale={renderScale}
               register={registerPage}
               onVisible={onVisiblePageChange}
             />
@@ -222,16 +306,21 @@ function PdfSurface({
 function LazyPage({
   page,
   width,
+  scale,
+  renderScale,
   register,
   onVisible,
 }: {
   page: number;
   width: number;
+  scale: number;
+  renderScale: number;
   register: (page: number, element: HTMLDivElement | null) => void;
   onVisible: (page: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shouldRender, setShouldRender] = useState(page <= 2);
+  const [isRendered, setIsRendered] = useState(false);
 
   useEffect(() => {
     const element = ref.current;
@@ -259,18 +348,19 @@ function LazyPage({
   }, [page, register, onVisible]);
 
   return (
-    <div ref={ref} data-page={page} className="relative">
+    <div ref={ref} data-page={page} className="relative origin-top-left" style={{ zoom: scale / renderScale }}>
       {shouldRender && width > 0 ? (
         <Page
           pageNumber={page}
-          width={width}
+          width={width * renderScale}
+          onRenderSuccess={() => setIsRendered(true)}
           renderAnnotationLayer
           renderTextLayer
           className="overflow-hidden rounded-lg border border-border shadow-sm"
-          loading={<PagePlaceholder page={page} />}
+          loading={isRendered ? undefined : <PagePlaceholder page={page} width={width * renderScale} />}
         />
       ) : (
-        <PagePlaceholder page={page} />
+        <PagePlaceholder page={page} width={width * renderScale} />
       )}
       <span className="pointer-events-none absolute right-2 bottom-2 rounded bg-foreground/70 px-1.5 py-0.5 text-[10px] font-medium text-background">
         {page}
@@ -279,11 +369,11 @@ function LazyPage({
   );
 }
 
-function PagePlaceholder({ page }: { page: number }) {
+function PagePlaceholder({ page, width }: { page: number; width?: number }) {
   return (
     <div
       className="flex w-full items-center justify-center rounded-lg border border-border bg-surface text-xs text-muted-foreground"
-      style={{ aspectRatio: "1 / 1.414" }}
+      style={{ aspectRatio: "1 / 1.414", width: width ? `${width}px` : "100%" }}
     >
       Page {page}
     </div>

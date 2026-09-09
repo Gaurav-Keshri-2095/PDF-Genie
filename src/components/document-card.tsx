@@ -2,6 +2,7 @@ import { AlertTriangle, FileText, ScanLine } from "lucide-react";
 import Link from "next/link";
 
 import { RetryIngest } from "@/components/retry-ingest";
+import { DeleteButton } from "@/components/delete-button";
 import { Badge, Card, Spinner } from "@/components/ui";
 import type { DocumentSummaryView } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -9,12 +10,14 @@ import { formatDate } from "@/lib/utils";
 export function DocumentCard({
   document,
   onRetried,
+  onDeleted,
 }: {
   document: DocumentSummaryView;
   onRetried?: () => void;
+  onDeleted?: () => void;
 }) {
   return (
-    <Card className="group flex flex-col transition-colors hover:border-accent/50">
+    <Card className="group flex flex-col transition-colors hover:border-accent/50 relative">
       <Link href={`/documents/${document.id}`} className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start gap-3">
           <FileText className="mt-0.5 size-4 shrink-0 text-accent" />
@@ -40,6 +43,7 @@ export function DocumentCard({
           </p>
         ) : null}
       </Link>
+      <DeleteButton id={document.id} onDeleted={onDeleted} />
     </Card>
   );
 }
@@ -91,9 +95,21 @@ function SummaryBody({
     );
   }
 
+  if (!document.summary) {
+    return (
+      <p className="text-sm text-muted-foreground">No summary available.</p>
+    );
+  }
+
+  const bullets = document.summary
+    .split(/(?<=[.!?])\s+/)
+    .filter(Boolean);
+
   return (
-    <p className="line-clamp-4 text-sm text-muted-foreground">
-      {document.summary ?? "No summary available."}
-    </p>
+    <ul className="list-disc pl-4 text-sm text-muted-foreground space-y-1">
+      {bullets.map((bullet, i) => (
+        <li key={i}>{bullet}</li>
+      ))}
+    </ul>
   );
 }

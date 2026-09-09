@@ -148,7 +148,7 @@ export function DashboardClient({ initialDocuments }: { initialDocuments: Docume
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((document) => (
-            <DocumentCard key={document.id} document={document} onRetried={refresh} />
+            <DocumentCard key={document.id} document={document} onRetried={refresh} onDeleted={refresh} />
           ))}
         </div>
       )}

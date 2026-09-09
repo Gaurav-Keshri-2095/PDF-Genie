@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, MessageSquare, ScanLine, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, MessageSquare, ScanLine, Sparkles, ZoomIn, ZoomOut } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
@@ -49,6 +49,7 @@ export function DocumentWorkspace({
   const [tab, setTab] = useState<Tab>("chat");
   const [currentPage, setCurrentPage] = useState(1);
   const [jumpTarget, setJumpTarget] = useState<{ page: number; nonce: number } | null>(null);
+  const [scale, setScale] = useState(1);
 
   const jumpToPage = useCallback((page: number) => {
     // The nonce makes a repeat jump to the same page still scroll.
@@ -70,28 +71,33 @@ export function DocumentWorkspace({
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section
           aria-label="Document"
-          className="flex min-h-[60vh] flex-1 flex-col border-b border-border lg:min-h-0 lg:border-r lg:border-b-0"
+          className="flex min-h-[60vh] min-w-0 flex-1 flex-col border-b border-border lg:min-h-0 lg:border-r lg:border-b-0"
         >
           <div className="flex items-center justify-between gap-2 border-b border-border bg-surface px-4 py-2">
             <span className="truncate text-xs font-medium text-muted-foreground">
               {document.filename}
             </span>
-            <PageStepper page={currentPage} pageCount={document.page_count} onJump={jumpToPage} />
+            <div className="flex items-center gap-4">
+              <ZoomControls scale={scale} onScaleChange={setScale} />
+              <PageStepper page={currentPage} pageCount={document.page_count} onJump={jumpToPage} />
+            </div>
           </div>
 
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 min-w-0 flex-1 relative">
             <PdfViewer
               access={access}
               hasText={document.has_text}
               jumpTarget={jumpTarget}
               onVisiblePageChange={setCurrentPage}
+              scale={scale}
+              onScaleChange={setScale}
             />
           </div>
         </section>
 
         <aside
           aria-label="Comments and chat"
-          className="flex min-h-[50vh] w-full flex-col bg-surface lg:min-h-0 lg:w-[400px] xl:w-[440px]"
+          className="flex shrink-0 min-h-[50vh] w-full flex-col bg-surface lg:min-h-0 lg:w-[400px] xl:w-[440px]"
         >
           <div role="tablist" className="flex shrink-0 border-b border-border">
             <TabButton
@@ -200,7 +206,9 @@ function SummaryBanner({
             ) : null}
           </div>
 
-          <p className="max-w-3xl text-sm text-muted-foreground">{summaryText(document)}</p>
+          {summaryText(document) ? (
+            <p className="max-w-3xl text-sm text-muted-foreground">{summaryText(document)}</p>
+          ) : null}
         </div>
 
         {shareControl ? <div className="shrink-0">{shareControl}</div> : null}
@@ -209,7 +217,7 @@ function SummaryBanner({
   );
 }
 
-function summaryText(document: DocumentSummaryView): string {
+function summaryText(document: DocumentSummaryView): string | null {
   if (document.status === "processing") return "Reading the document and writing a summary...";
   if (document.status === "failed") {
     return document.error ?? "This document could not be processed.";
@@ -217,7 +225,7 @@ function summaryText(document: DocumentSummaryView): string {
   if (!document.has_text) {
     return "This PDF has no extractable text, so no summary could be generated. You can still read it and leave comments.";
   }
-  return document.summary ?? "No summary available.";
+  return null;
 }
 
 export function PageStepper({
@@ -253,6 +261,39 @@ export function PageStepper({
         onClick={() => onJump(Math.min(pageCount, page + 1))}
       >
         <ChevronRight className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+export function ZoomControls({
+  scale,
+  onScaleChange,
+}: {
+  scale: number;
+  onScaleChange: (scale: number | ((prev: number) => number)) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 w-7 p-0"
+        aria-label="Zoom out"
+        disabled={scale <= 1}
+        onClick={() => onScaleChange((s) => Math.max(1, s - 0.25))}
+      >
+        <ZoomOut className="size-3.5" />
+      </Button>
+      <span className="w-10 text-center font-medium tabular-nums">{Math.round(scale * 100)}%</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 w-7 p-0"
+        aria-label="Zoom in"
+        onClick={() => onScaleChange((s) => Math.min(5, s + 0.25))}
+      >
+        <ZoomIn className="size-3.5" />
       </Button>
     </div>
   );
