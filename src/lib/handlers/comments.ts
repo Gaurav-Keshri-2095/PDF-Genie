@@ -9,6 +9,7 @@ import type { CommentRecord } from "@/lib/types";
 export const commentInputSchema = z.object({
   body: z.string().trim().min(1, "Write something first.").max(4_000, "Comment is too long."),
   pageNumber: z.number().int().positive().nullable().optional(),
+  parentId: z.string().uuid().nullable().optional(),
   /** Required in the share lane, where there is no account to take a name from. */
   authorName: z.string().trim().min(1).max(80).optional(),
 });
@@ -42,6 +43,7 @@ export async function createComment(grant: Grant, input: CommentInput): Promise<
     .from("comments")
     .insert({
       document_id: grant.documentId,
+      parent_id: input.parentId ?? null,
       page_number: input.pageNumber ?? null,
       body: input.body,
       author_user_id: grant.userId ?? null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Send } from "lucide-react";
+import { MessageSquare, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Alert, Avatar, Badge, Button, EmptyState, Input, Spinner, Textarea } from "@/components/ui";
@@ -40,6 +40,7 @@ export function CommentPanel({
   const [anchorToPage, setAnchorToPage] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
 
   // Uncontrolled: the remembered name is written straight to the DOM node
   // after mount, which avoids a hydration mismatch between the server (which
@@ -93,6 +94,7 @@ export function CommentPanel({
         body: JSON.stringify({
           body: trimmed,
           pageNumber: anchorToPage ? currentPage : null,
+          parentId: replyToId,
           ...(isGuest ? { authorName } : {}),
         }),
       });
@@ -102,6 +104,7 @@ export function CommentPanel({
 
       setComments((existing) => [...existing, payload.comment]);
       setBody("");
+      setReplyToId(null);
 
       if (nameStorageKey) {
         try {
@@ -116,6 +119,17 @@ export function CommentPanel({
       setSubmitting(false);
     }
   }
+
+  const rootComments = comments.filter((c) => !c.parent_id);
+  const repliesByParent = comments.reduce((acc, c) => {
+    if (c.parent_id) {
+      if (!acc[c.parent_id]) acc[c.parent_id] = [];
+      acc[c.parent_id].push(c);
+    }
+    return acc;
+  }, {} as Record<string, CommentRecord[]>);
+  
+  const replyTarget = replyToId ? comments.find(c => c.id === replyToId) : null;
 
   return (
     <div className="flex h-full flex-col">
@@ -132,36 +146,81 @@ export function CommentPanel({
           />
         ) : (
           <ul className="space-y-4">
-            {comments.map((comment) => (
-              <li key={comment.id} className="flex gap-3">
-                <Avatar name={comment.author_name} />
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-foreground">
-                      {comment.author_name}
-                    </span>
-                    {comment.author_share_id && !comment.author_user_id ? (
-                      <Badge>Guest</Badge>
-                    ) : null}
-                    <span className="text-xs text-muted-foreground">
-                      {formatDateTime(comment.created_at)}
-                    </span>
+            {rootComments.map((comment) => (
+              <li key={comment.id} className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <Avatar name={comment.author_name} />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-foreground">
+                        {comment.author_name}
+                      </span>
+                      {comment.author_share_id && !comment.author_user_id ? (
+                        <Badge>Guest</Badge>
+                      ) : null}
+                      <span className="text-xs text-muted-foreground">
+                        {formatDateTime(comment.created_at)}
+                      </span>
+                    </div>
+
+                    <p className="text-sm whitespace-pre-wrap text-foreground">{comment.body}</p>
+
+                    <div className="flex items-center gap-4 mt-1">
+                      {comment.page_number ? (
+                        <button
+                          type="button"
+                          onClick={() => onJumpToPage(comment.page_number!)}
+                          className="text-xs font-medium text-accent hover:underline"
+                        >
+                          Page {comment.page_number}
+                        </button>
+                      ) : null}
+                      {canComment && (
+                        <button
+                          type="button"
+                          onClick={() => setReplyToId(comment.id)}
+                          className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          Reply
+                        </button>
+                      )}
+                    </div>
                   </div>
-
-                  {/* Rendered as text, never as markup - the author name and
-                      body of a guest comment are untrusted input. */}
-                  <p className="text-sm whitespace-pre-wrap text-foreground">{comment.body}</p>
-
-                  {comment.page_number ? (
-                    <button
-                      type="button"
-                      onClick={() => onJumpToPage(comment.page_number!)}
-                      className="text-xs font-medium text-accent hover:underline"
-                    >
-                      Page {comment.page_number}
-                    </button>
-                  ) : null}
                 </div>
+
+                {/* Replies */}
+                {(repliesByParent[comment.id] || []).length > 0 && (
+                  <ul className="ml-8 space-y-3 border-l border-border pl-4">
+                    {repliesByParent[comment.id].map((reply) => (
+                      <li key={reply.id} className="flex gap-3">
+                        <Avatar name={reply.author_name} />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium text-foreground">
+                              {reply.author_name}
+                            </span>
+                            {reply.author_share_id && !reply.author_user_id ? (
+                              <Badge>Guest</Badge>
+                            ) : null}
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateTime(reply.created_at)}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap text-foreground">{reply.body}</p>
+                          {reply.page_number ? (
+                            <button
+                              type="button"
+                              onClick={() => onJumpToPage(reply.page_number!)}
+                              className="text-xs font-medium text-accent hover:underline mt-1"
+                            >
+                              Page {reply.page_number}
+                            </button>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
@@ -181,6 +240,21 @@ export function CommentPanel({
               maxLength={80}
             />
           ) : null}
+
+          {replyTarget && (
+            <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
+              <span className="text-muted-foreground">
+                Replying to <span className="font-medium text-foreground">{replyTarget.author_name}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setReplyToId(null)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
 
           <Textarea
             value={body}
