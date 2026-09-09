@@ -61,7 +61,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     // Send the email using Resend
     const { error: resendError } = await resend.emails.send({
       from: "onboarding@resend.dev",
-      reply_to: ownerEmail !== "Someone" ? ownerEmail : undefined,
+      replyTo: ownerEmail !== "Someone" ? ownerEmail : undefined,
       to: email, // This is the invitee's gmail
       subject: `${ownerEmail} invited you to view "${document.filename}"`,
       html: `
