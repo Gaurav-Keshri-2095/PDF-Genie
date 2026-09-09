@@ -1,11 +1,14 @@
+"use client";
+
 import { AlertTriangle, FileText, ScanLine } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 import { RetryIngest } from "@/components/retry-ingest";
 import { DeleteButton } from "@/components/delete-button";
 import { Badge, Card, Spinner } from "@/components/ui";
 import type { DocumentSummaryView } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
 export function DocumentCard({
   document,
@@ -16,19 +19,29 @@ export function DocumentCard({
   onRetried?: () => void;
   onDeleted?: () => void;
 }) {
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      setIsNavigating(true);
+    }
+  };
+
   return (
-    <Card className="group flex flex-col transition-colors hover:border-accent/50 relative">
-      <Link href={`/documents/${document.id}`} className="flex flex-1 flex-col gap-3 p-4">
+    <Card className="group flex flex-col transition-colors hover:border-accent/50 relative overflow-hidden">
+      <Link href={`/documents/${document.id}`} className={cn("flex flex-1 flex-col gap-3 p-4 transition-opacity", isNavigating && "opacity-40 pointer-events-none")} onClick={handleClick}>
         <div className="flex items-start gap-3">
           <FileText className="mt-0.5 size-4 shrink-0 text-accent" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-foreground" title={document.filename}>
-              {document.filename}
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {formatDate(document.created_at)}
-              {document.page_count ? ` · ${document.page_count} pages` : ""}
-            </p>
+          <div className="min-w-0 flex-1 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground" title={document.filename}>
+                {document.filename}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {formatDate(document.created_at)}
+                {document.page_count ? ` · ${document.page_count} pages` : ""}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -44,6 +57,11 @@ export function DocumentCard({
         ) : null}
       </Link>
       <DeleteButton id={document.id} onDeleted={onDeleted} />
+      {isNavigating && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <Spinner className="size-6 text-accent" />
+        </div>
+      )}
     </Card>
   );
 }

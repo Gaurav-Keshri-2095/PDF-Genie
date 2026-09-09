@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { Eye, EyeOff } from "lucide-react";
 
 import { Alert, Button, Card, Input, Label, Spinner } from "@/components/ui";
 import type { AuthFormState } from "@/app/(auth)/actions";
+import { cn } from "@/lib/utils";
 
 type Field = {
   name: string;
@@ -13,6 +15,27 @@ type Field = {
   autoComplete?: string;
   placeholder?: string;
 };
+
+function PasswordInput(props: React.ComponentProps<typeof Input>) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input
+        {...props}
+        type={show ? "text" : "password"}
+        className={cn("pr-10", props.className)}
+      />
+      <button
+        type="button"
+        onClick={() => setShow(!show)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
+        aria-label={show ? "Hide password" : "Show password"}
+      >
+        {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
+    </div>
+  );
+}
 
 function SubmitButton({ label }: { label: string }) {
   // useFormStatus reads the parent form's pending state, so the button
@@ -55,14 +78,24 @@ export function AuthForm({
         {fields.map((field) => (
           <div key={field.name} className="space-y-1.5">
             <Label htmlFor={field.name}>{field.label}</Label>
-            <Input
-              id={field.name}
-              name={field.name}
-              type={field.type ?? "text"}
-              autoComplete={field.autoComplete}
-              placeholder={field.placeholder}
-              required
-            />
+            {field.type === "password" ? (
+              <PasswordInput
+                id={field.name}
+                name={field.name}
+                autoComplete={field.autoComplete}
+                placeholder={field.placeholder}
+                required
+              />
+            ) : (
+              <Input
+                id={field.name}
+                name={field.name}
+                type={field.type ?? "text"}
+                autoComplete={field.autoComplete}
+                placeholder={field.placeholder}
+                required
+              />
+            )}
           </div>
         ))}
 

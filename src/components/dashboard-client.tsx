@@ -9,7 +9,7 @@ import { Alert, EmptyState, Input, Spinner } from "@/components/ui";
 import type { DocumentSummaryView } from "@/lib/types";
 
 /** Long enough that the server switches to semantic search - see /api/search. */
-const SEMANTIC_MIN_LENGTH = 12;
+const SEMANTIC_MIN_LENGTH = 3;
 const SEARCH_DEBOUNCE_MS = 300;
 const POLL_INTERVAL_MS = 2_500;
 
@@ -127,7 +127,7 @@ export function DashboardClient({ initialDocuments }: { initialDocuments: Docume
         ) : null}
       </div>
 
-      <UploadDropzone onUploaded={refresh} />
+      <UploadDropzone onUploaded={refresh} existingFilenames={documents.map((d) => d.filename)} />
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
 

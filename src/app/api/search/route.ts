@@ -15,7 +15,7 @@ export const runtime = "nodejs";
  * index is for. Sending "agreement" through an embedding model would be slower
  * and worse than a substring match.
  */
-const SEMANTIC_QUERY_MIN_LENGTH = 12;
+const SEMANTIC_QUERY_MIN_LENGTH = 3;
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();

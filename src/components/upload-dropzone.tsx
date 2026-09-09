@@ -23,7 +23,13 @@ type Stage = "idle" | "preparing" | "uploading" | "processing";
  * requirement: Vercel rejects request bodies over 4.5 MB, so a PDF can never
  * be posted through a route handler.
  */
-export function UploadDropzone({ onUploaded }: { onUploaded: () => void }) {
+export function UploadDropzone({
+  onUploaded,
+  existingFilenames = [],
+}: {
+  onUploaded: () => void;
+  existingFilenames?: string[];
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +43,11 @@ export function UploadDropzone({ onUploaded }: { onUploaded: () => void }) {
 
       if (file.size > MAX_BYTES) {
         setError(`That file is ${formatBytes(file.size)}. The limit is 25 MB.`);
+        return;
+      }
+
+      if (existingFilenames.includes(file.name)) {
+        setError(`A file named "${file.name}" already exists.`);
         return;
       }
 
