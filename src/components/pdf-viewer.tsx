@@ -55,10 +55,11 @@ export function PdfViewer({
   } | null>(null);
 
   const prevScale = useRef(scale);
-  if (prevScale.current !== scale) {
-    // If the scale changed (e.g. via UI buttons) but we have no scroll anchor from
+  const prevWidth = useRef(width);
+  if (prevScale.current !== scale || (prevWidth.current !== width && prevWidth.current !== 0 && width !== 0)) {
+    // If the scale or width changed but we have no scroll anchor from
     // a wheel or touch event, we capture the center of the viewport right now, BEFORE
-    // the DOM updates to the new scale, so we can zoom into the center smoothly.
+    // the DOM updates to the new dimensions, so we can zoom/resize smoothly.
     if (!scrollAnchor.current && containerRef.current) {
       const containerRect = containerRef.current.getBoundingClientRect();
       const centerY = containerRect.top + containerRect.height / 2;
@@ -92,6 +93,7 @@ export function PdfViewer({
       }
     }
     prevScale.current = scale;
+    prevWidth.current = width;
   }
 
   /**
@@ -305,7 +307,7 @@ export function PdfViewer({
       }
       scrollAnchor.current = null;
     }
-  }, [scale]);
+  }, [scale, width]);
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col">

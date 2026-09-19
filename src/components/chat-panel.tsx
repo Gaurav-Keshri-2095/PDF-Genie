@@ -1,6 +1,6 @@
 "use client";
 
-import { Send, Sparkles } from "lucide-react";
+import { Plus, Send, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Alert, Button, EmptyState, Spinner, Textarea } from "@/components/ui";
@@ -29,8 +29,53 @@ export function ChatPanel({
   disabledReason?: string;
   onJumpToPage: (page: number) => void;
 }) {
-  const [sessionId] = useState(() => crypto.randomUUID());
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [messages, setMessages] = useState<ChatMessageRecord[]>([]);
+  const [isClientLoaded, setIsClientLoaded] = useState(false);
+  const cacheKey = `pdf-genie-chat-${access.kind === "owner" ? access.documentId : access.token}`;
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const age = Date.now() - parsed.timestamp;
+        if (age < 2 * 60 * 60 * 1000) {
+          setMessages(parsed.messages || []);
+          if (parsed.sessionId) setSessionId(parsed.sessionId);
+        } else {
+          localStorage.removeItem(cacheKey);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    setIsClientLoaded(true);
+  }, [cacheKey]);
+
+  useEffect(() => {
+    if (!isClientLoaded) return;
+    if (messages.length === 0) {
+      localStorage.removeItem(cacheKey);
+      return;
+    }
+    localStorage.setItem(
+      cacheKey,
+      JSON.stringify({
+        timestamp: Date.now(),
+        sessionId,
+        messages,
+      })
+    );
+  }, [messages, sessionId, cacheKey, isClientLoaded]);
+
+  function startNewChat() {
+    setMessages([]);
+    setSessionId(crypto.randomUUID());
+    setError(null);
+    setPending(null);
+    setQuestion("");
+  }
   const [pending, setPending] = useState<PendingAnswer | null>(null);
   const [question, setQuestion] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -203,10 +248,18 @@ export function ChatPanel({
         />
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">Enter to send, Shift+Enter for a new line</span>
-          <Button size="sm" onClick={() => void ask()} disabled={streaming || !question.trim()}>
-            {streaming ? <Spinner className="size-3" /> : <Send className="size-3.5" />}
-            Ask
-          </Button>
+          <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <Button size="sm" variant="secondary" onClick={startNewChat} disabled={streaming}>
+                <Plus className="size-3.5" />
+                New
+              </Button>
+            )}
+            <Button size="sm" onClick={() => void ask()} disabled={streaming || !question.trim()}>
+              {streaming ? <Spinner className="size-3" /> : <Send className="size-3.5" />}
+              Ask
+            </Button>
+          </div>
         </div>
       </div>
     </div>
