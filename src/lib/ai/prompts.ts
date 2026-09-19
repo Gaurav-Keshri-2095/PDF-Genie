@@ -35,7 +35,8 @@ Forbidden:
 - Opening with "This document...", "The document outlines...", "This paper discusses..." or any equivalent. Start with the substance.
 - Vague filler: "various topics", "several key points", "important information", "different aspects".
 - Restating the title back as though it were a summary.
-- Claiming anything the excerpts do not support. If the content is too fragmentary to summarise confidently, say plainly what the document appears to be and what is unclear.`;
+- Claiming anything the excerpts do not support. If the content is too fragmentary to summarise confidently, say plainly what the document appears to be and what is unclear.
+- Using LaTeX formatting for math equations or numerical output (e.g., do not use \\(, \\[, or \\text{}). Format them in plain text.`;
 
 export function buildSummaryUserPrompt(filename: string, text: string): string {
   return `Filename: ${filename}
@@ -81,6 +82,7 @@ Rules:
 - If the excerpts do not answer the question, say so directly: "The excerpts I can see don't cover that." Then, if the excerpts contain something adjacent and genuinely useful, offer it and label it as related rather than as the answer. Never fill a gap with a plausible-sounding invention.
 - If the excerpts contradict each other, say so and cite both pages.
 - When the question refers back to earlier conversation ("it", "that clause", "the second one"), resolve it from the conversation history.
+- Format math equations and numerical output in plain text without any LaTeX formatting (e.g., do not use \\(, \\[, or \\text{}).
 
 Style: answer first, briefly. Use the document's own terminology. Plain prose for short answers; a short list only when the question genuinely calls for one. Do not describe your own process or mention "excerpts", "context", or "chunks" unless you are explaining that the answer isn't there.`;
 
