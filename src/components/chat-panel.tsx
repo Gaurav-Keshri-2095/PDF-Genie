@@ -279,11 +279,34 @@ function SimpleMarkdown({ text }: { text: string }) {
     <div className="space-y-2">
       {paragraphs.map((p, i) => (
         <p key={i} className="whitespace-pre-wrap leading-relaxed">
-          {formatBold(p)}
+          {formatBold(formatMath(p))}
         </p>
       ))}
     </div>
   );
+}
+
+function formatMath(text: string) {
+  return text.replace(/\\\((.*?)\\\)|\\\[(.*?)\\\]/gs, (match, inline, display) => {
+    let math = inline || display;
+    if (!math) return match;
+    
+    return math
+      .replace(/\\text{([^}]+)}/g, '$1')
+      .replace(/\\geq/g, '≥')
+      .replace(/\\leq/g, '≤')
+      .replace(/\\times/g, '×')
+      .replace(/\\div/g, '÷')
+      .replace(/\\neq/g, '≠')
+      .replace(/\\pm/g, '±')
+      .replace(/\\cdot/g, '·')
+      .replace(/\\approx/g, '≈')
+      .replace(/_{([^}]+)}/g, '_$1')
+      .replace(/\^{([^}]+)}/g, '^$1')
+      .replace(/\s+/g, ' ')
+      .replace(/\\/g, '')
+      .trim();
+  });
 }
 
 function formatBold(text: string) {
