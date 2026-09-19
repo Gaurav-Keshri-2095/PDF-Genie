@@ -287,8 +287,8 @@ function SimpleMarkdown({ text }: { text: string }) {
 }
 
 function formatMath(text: string) {
-  return text.replace(/\\\((.*?)\\\)|\\\[(.*?)\\\]/gs, (match, inline, display) => {
-    let math = inline || display;
+  return text.replace(/\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]/g, (match) => {
+    let math = match.replace(/^\\\(|^\\\[|\\\]$|\\\)$/g, "");
     if (!math) return match;
     
     return math
