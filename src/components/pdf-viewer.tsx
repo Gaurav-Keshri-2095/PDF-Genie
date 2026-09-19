@@ -52,11 +52,16 @@ export function PdfViewer({
     ratioY: number;
     clientX: number;
     clientY: number;
+    keepAlive?: boolean;
   } | null>(null);
 
   const prevScale = useRef(scale);
   const prevWidth = useRef(width);
+  const resizeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   if (prevScale.current !== scale || (prevWidth.current !== width && prevWidth.current !== 0 && width !== 0)) {
+    const isResize = prevWidth.current !== width;
+    
     // If the scale or width changed but we have no scroll anchor from
     // a wheel or touch event, we capture the center of the viewport right now, BEFORE
     // the DOM updates to the new dimensions, so we can zoom/resize smoothly.
@@ -89,9 +94,18 @@ export function PdfViewer({
           ratioY: (centerY - rect.top) / Math.max(1, rect.height),
           clientX: centerX,
           clientY: centerY,
+          keepAlive: isResize,
         };
       }
     }
+
+    if (isResize) {
+      if (resizeTimeout.current) clearTimeout(resizeTimeout.current);
+      resizeTimeout.current = setTimeout(() => {
+        scrollAnchor.current = null;
+      }, 200);
+    }
+
     prevScale.current = scale;
     prevWidth.current = width;
   }
@@ -295,17 +309,27 @@ export function PdfViewer({
 
   useLayoutEffect(() => {
     if (scrollAnchor.current && containerRef.current) {
-      const { page, ratioX, ratioY, clientX, clientY } = scrollAnchor.current;
+      const { page, ratioX, ratioY, clientX, clientY, keepAlive } = scrollAnchor.current;
       const node = pageRefs.current.get(page);
       if (node) {
         const rect = node.getBoundingClientRect();
         const currentX = rect.left + rect.width * ratioX;
         const currentY = rect.top + rect.height * ratioY;
 
-        containerRef.current.scrollLeft += currentX - clientX;
-        containerRef.current.scrollTop += currentY - clientY;
+        let targetX = clientX;
+        let targetY = clientY;
+        if (keepAlive) {
+          const containerRect = containerRef.current.getBoundingClientRect();
+          targetX = containerRect.left + containerRect.width / 2;
+          targetY = containerRect.top + containerRect.height / 2;
+        }
+
+        containerRef.current.scrollLeft += currentX - targetX;
+        containerRef.current.scrollTop += currentY - targetY;
       }
-      scrollAnchor.current = null;
+      if (!keepAlive) {
+        scrollAnchor.current = null;
+      }
     }
   }, [scale, width]);
 
